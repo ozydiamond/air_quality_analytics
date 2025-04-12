@@ -1,3 +1,4 @@
+import os
 import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
@@ -7,8 +8,13 @@ import plotly.express as px
 # -----------------------
 # LOAD DATA
 # -----------------------
-file_path = './clean_all_df.csv'
-all_df = pd.read_csv(file_path)
+
+file_path = 'dashboard/clean_all_df.csv'
+if not os.path.exists(file_path):
+    st.error(f"File tidak ditemukan: {file_path}")
+else:
+    all_df = pd.read_csv(file_path)
+
 
 # -----------------------
 # FUNCTION
