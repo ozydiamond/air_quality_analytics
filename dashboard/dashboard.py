@@ -41,7 +41,7 @@ def unhealthy_pm25_days(df, threshold=55.5):
 # -----------------------
 # SIDEBAR FILTER
 # -----------------------
-st.sidebar.image("wind.png", width=200)
+st.sidebar.image("dashboard/wind.png", width=200)
 st.sidebar.header("🔍 Filter Data")
 
 # Station filter
