@@ -1,28 +1,19 @@
-import os
+import streamlit as st
 import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
-import streamlit as st
 import plotly.express as px
 
-# -----------------------
-# LOAD DATA
-# -----------------------
-
-file_path = 'dashboard/clean_all_df.csv'
-if not os.path.exists(file_path):
-    st.error(f"File tidak ditemukan: {file_path}")
-else:
-    all_df = pd.read_csv(file_path)
-
-
-# -----------------------
-# FUNCTION
-# -----------------------
-def add_date_column(df):
-    df['date'] = pd.to_datetime(df[['year', 'month', 'day']])
+# Load data
+@st.cache_data
+def load_data():
+    df = pd.read_csv("clean_all_df.csv")
+    df["date"] = pd.to_datetime(df[["year", "month", "day"]])
     return df
 
+df = load_data()
+
+# FUNCTION
 def average_daily_pollutants(df):
     return df.groupby('date')[['PM2.5', 'PM10', 'O3', 'SO2', 'NO2', 'CO']].mean().reset_index()
 
@@ -36,49 +27,48 @@ def average_temp_rain(df):
 def unhealthy_pm25_days(df, threshold=55.5):
     df['date'] = pd.to_datetime(df['date'])
     daily_pm25 = df.groupby('date')['PM2.5'].mean()
-    return daily_pm25[daily_pm25 > threshold].count()
+    unhealthy_days = daily_pm25[daily_pm25 > threshold].count()
+    total_days = daily_pm25.count()
+    return unhealthy_days, total_days
 
-# -----------------------
-# SIDEBAR FILTER
-# -----------------------
-st.sidebar.image("dashboard/wind.png", width=200)
-st.sidebar.header("🔍 Filter Data")
 
-# Station filter
-station_list = all_df['station'].unique().tolist()
-selected_stations = st.sidebar.multiselect("Pilih Kota/Station", options=station_list, default=station_list)
 
-# Add 'date' column
-all_df = add_date_column(all_df)
+# Sidebar
+st.sidebar.image("logo.png", use_column_width=True)
+st.sidebar.title("Filter")
 
-# Date filter
-min_date = all_df['date'].min()
-max_date = all_df['date'].max()
-selected_date_range = st.sidebar.date_input("Pilih Rentang Tanggal", [min_date, max_date], min_value=min_date, max_value=max_date)
+# Filter Tanggal
+min_date = df["date"].min().date()
+max_date = df["date"].max().date()
+selected_date = st.sidebar.date_input(
+    "Pilih rentang tanggal", [min_date, max_date],
+    min_value=min_date, max_value=max_date
+)
 
-# -----------------------
-# DATA FILTERING
-# -----------------------
-df_filtered = all_df[
-    (all_df['station'].isin(selected_stations)) &
-    (all_df['date'] >= pd.to_datetime(selected_date_range[0])) &
-    (all_df['date'] <= pd.to_datetime(selected_date_range[1]))
+# Filter Kota
+cities = df["station"].unique().tolist()
+selected_cities = st.sidebar.multiselect("Pilih kota", cities, default=cities)
+if len(selected_cities) == 0:
+    st.sidebar.error("⚠️ Anda harus memilih setidaknya satu kota.")
+    st.stop()
+
+# Terapkan filter
+filtered_df = df[
+    (df["station"].isin(selected_cities)) &
+    (df["date"] >= pd.to_datetime(selected_date[0])) &
+    (df["date"] <= pd.to_datetime(selected_date[1]))
 ]
 
-# -----------------------
-# METRICS CALCULATION
-# -----------------------
-daily_avg_df = average_daily_pollutants(df_filtered)
-max_day, max_value = highest_pollution_day(df_filtered)
-avg_temp, avg_rain = average_temp_rain(df_filtered)
-unhealthy_days = unhealthy_pm25_days(df_filtered)
+# Metrics Calculation
+daily_avg_df = average_daily_pollutants(filtered_df)
+max_day, max_value = highest_pollution_day(filtered_df)
+avg_temp, avg_rain = average_temp_rain(filtered_df)
+unhealthy_days, total_days = unhealthy_pm25_days(filtered_df)
 
-# -----------------------
-# DASHBOARD DISPLAY
-# -----------------------
-st.title("📊 Dashboard Kualitas Udara")
+# Title
+st.title("📊 Air Quality Dashboard - China (2013–2017)")
 
-# --- RATA-RATA POLUTAN ---
+# Informasi Rata-rata Polutan
 st.markdown("### 🔹 Rata-rata Harian Polutan")
 col1, col2, col3 = st.columns(3)
 col4, col5, col6 = st.columns(3)
@@ -91,24 +81,21 @@ col4.metric("SO2", f"{daily_avg_df['SO2'].mean():.2f} µg/m³")
 col5.metric("NO2", f"{daily_avg_df['NO2'].mean():.2f} µg/m³")
 col6.metric("CO", f"{daily_avg_df['CO'].mean():.2f} µg/m³")
 
-# --- POLUSI TERTINGGI & HARI TIDAK SEHAT ---
+# Polusi tertinggi dan hari tidak sehat
 st.markdown("### 🔹 Informasi Polusi Penting")
 col7, col8 = st.columns(2)
 col7.metric("📅 Hari PM2.5 Tertinggi", f"{max_day.date()}", f"{max_value:.2f} µg/m³")
-col8.metric("❗ Hari Tidak Sehat (PM2.5 > 55.5)", f"{unhealthy_days} Hari")
+col8.metric("❗ Hari Tidak Sehat (PM2.5 > 55.5)",
+            f"{unhealthy_days} Hari",
+            f"Dari total {total_days} hari")
 
-# --- CUACA RATA-RATA ---
-st.markdown("### 🔹 Cuaca Rata-rata")
-col9, col10 = st.columns(2)
-col9.metric("🌡️ Suhu Rata-rata", f"{avg_temp:.2f} °C")
-col10.metric("🌧️ Curah Hujan", f"{avg_rain:.2f} mm")
 
-# --- LINE CHART PM2.5 per Kota ---
-st.markdown("### 📉 Rata-rata Harian PM2.5 per Kota")
+# Visualisasi Tren PM2.5
+st.markdown("### Rata-rata Harian PM2.5 per Kota")
 
-if not df_filtered.empty:
+if not filtered_df.empty:
     pm25_by_station = (
-        df_filtered.groupby(['date', 'station'])['PM2.5']
+        filtered_df.groupby(['date', 'station'])['PM2.5']
         .mean()
         .reset_index()
         .dropna()
@@ -119,7 +106,6 @@ if not df_filtered.empty:
         x='date',
         y='PM2.5',
         color='station',
-        title='Rata-rata Harian PM2.5 per Kota',
         labels={'date': 'Tanggal', 'PM2.5': 'PM2.5 (µg/m³)', 'station': 'Kota'}
     )
     fig_pm25.update_layout(legend_title="Kota")
@@ -127,34 +113,51 @@ if not df_filtered.empty:
 else:
     st.warning("Data PM2.5 tidak tersedia untuk periode yang dipilih.")
 
+# Tren PM2.5 dan PM10 tiap kota pertahun
+st.markdown("### Tren Tahunan PM2.5 dan PM10 per Kota")
 
-# --- LINE CHART Suhu per Kota ---
-st.markdown("### 🌡️ Rata-rata Suhu Harian per Kota")
+col_a, col_b = st.columns(2)
 
-if not df_filtered.empty and 'TEMP' in df_filtered.columns:
-    temp_by_station = (
-        df_filtered.groupby(['date', 'station'])['TEMP']
-        .mean()
-        .reset_index()
-        .dropna()
+with col_a:
+    st.markdown("#### PM2.5 per Tahun")
+    yearly_pm25 = (
+        filtered_df.groupby(['year', 'station'])['PM2.5']
+        .mean().reset_index().dropna()
     )
 
-    fig_temp = px.line(
-        temp_by_station,
-        x='date',
-        y='TEMP',
+    fig_yearly_pm25 = px.line(
+        yearly_pm25,
+        x='year',
+        y='PM2.5',
         color='station',
-        title='Rata-rata Suhu Harian per Kota',
-        labels={'date': 'Tanggal', 'TEMP': 'Suhu (°C)', 'station': 'Kota'}
+        markers=True,
+        labels={'year': 'Tahun', 'PM2.5': 'Rata-rata PM2.5', 'station': 'Kota'}
     )
-    fig_temp.update_layout(legend_title="Kota")
-    st.plotly_chart(fig_temp, use_container_width=True)
-else:
-    st.warning("Data suhu tidak tersedia untuk periode yang dipilih.")
+    fig_yearly_pm25.update_layout(legend_title="Kota", xaxis=dict(dtick=1))
+    st.plotly_chart(fig_yearly_pm25, use_container_width=True)
 
-# --- PM2.5 per STATION ---
-st.markdown("### 🌆 Rata-rata PM2.5 per Kota (Station)")
-pm25_by_city = df_filtered.groupby('station')['PM2.5'].mean().reset_index().dropna()
+with col_b:
+    st.markdown("#### PM10 per Tahun")
+    yearly_pm10 = (
+        filtered_df.groupby(['year', 'station'])['PM10']
+        .mean().reset_index().dropna()
+    )
+
+    fig_yearly_pm10 = px.line(
+        yearly_pm10,
+        x='year',
+        y='PM10',
+        color='station',
+        markers=True,
+        labels={'year': 'Tahun', 'PM10': 'Rata-rata PM10', 'station': 'Kota'}
+    )
+    fig_yearly_pm10.update_layout(legend_title="Kota", xaxis=dict(dtick=1))
+    st.plotly_chart(fig_yearly_pm10, use_container_width=True)
+
+
+#rata rata PM2.5 per kota seluruh tahun
+st.markdown("### Rata-rata PM2.5 per Kota (Station)")
+pm25_by_city = filtered_df.groupby('station')['PM2.5'].mean().reset_index().dropna()
 pm25_by_city = pm25_by_city.sort_values(by='PM2.5', ascending=True)
 
 fig_horizontal = px.bar(
@@ -176,3 +179,13 @@ fig_horizontal.update_layout(
 )
 
 st.plotly_chart(fig_horizontal, use_container_width=True)
+
+# Visualisasi Korelasi
+st.subheader("Korelasi Polutan dan Cuaca")
+corr_cols = ['PM2.5', 'PM10', 'SO2', 'NO2', 'CO',
+       'O3', 'TEMP', 'PRES', 'DEWP', 'WSPM']
+corr_df = filtered_df[corr_cols].dropna().corr()
+
+fig, ax = plt.subplots(figsize=(10, 6))
+sns.heatmap(corr_df, annot=True, cmap="coolwarm", fmt=".2f", ax=ax)
+st.pyplot(fig)

@@ -30,7 +30,6 @@ Jika Anda menggunakan Anaconda, ikuti langkah-langkah berikut:
     Pastikan file `requirements.txt` Anda berisi daftar library berikut:
     ```
     matplotlib==3.10.1
-    missingno==0.5.2
     pandas==2.2.3
     plotly==6.0.1
     seaborn==0.13.2
