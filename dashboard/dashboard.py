@@ -34,7 +34,7 @@ def unhealthy_pm25_days(df, threshold=55.5):
 
 
 # Sidebar
-st.sidebar.image("logo.png", use_column_width=True)
+st.sidebar.image("dashboard/logo.png", use_column_width=True)
 st.sidebar.title("Filter")
 
 # Filter Tanggal
