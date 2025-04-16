@@ -7,7 +7,7 @@ import plotly.express as px
 # Load data
 @st.cache_data
 def load_data():
-    df = pd.read_csv("clean_all_df.csv")
+    df = pd.read_csv("dashboard/clean_all_df.csv")
     df["date"] = pd.to_datetime(df[["year", "month", "day"]])
     return df
 
